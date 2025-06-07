@@ -1,0 +1,7 @@
+- Token Name: SuperPage
+- Token Symbol: PAGE
+- Mint Address: 9jzZ7MxYmYhv8xBuMUaCZmCh2N7g7YBAdM6BWrADLfR1
+- Decimals: 9
+- Total Supply: 1000000000
+- Owner: BMACCcDnzGzkoXk5Eg8kQXe6CrwAAAFztexcDhiRqHpL
+- Token Account: 5g8M4PnXYJw4AurRJv5K1rmgKS9e5gPtKLD3BSJawQRM
