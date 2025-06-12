@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { CivicAuthProvider } from '@civic/auth/nextjs';
 
 const geistSans = Geist({
 	variable: '--font-geist-sans',
@@ -23,8 +24,10 @@ export default function App({ children }: { children: React.ReactNode }) {
 				<body
 					className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 				>
-					{children}
-					<Toaster richColors />
+					<CivicAuthProvider>
+						{children}
+						<Toaster richColors />
+					</CivicAuthProvider>
 				</body>
 			</html>
 		</QueryClientProvider>
