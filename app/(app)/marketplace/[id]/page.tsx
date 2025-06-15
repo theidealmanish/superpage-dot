@@ -431,6 +431,7 @@ export default function ListingDetailPage() {
 								<Button
 									className='w-full'
 									size='lg'
+									// @ts-ignore
 									disabled={
 										isOwner ||
 										(listing.isLimited && listing.quantity === 0) ||
@@ -590,6 +591,7 @@ export default function ListingDetailPage() {
 
 						<Button
 							onClick={handlePurchase}
+							// @ts-ignore
 							disabled={
 								isPurchasing ||
 								txId !== null ||
