@@ -11,6 +11,8 @@ import {
 	Link2,
 	Share2,
 	AlertTriangle,
+	Wallet,
+	Flame,
 } from 'lucide-react';
 
 import {
@@ -45,8 +47,10 @@ import {
 	BreadcrumbList,
 	BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import Loading from '@/components/Loading';
+import { useSuperPageToken } from '@/hooks/useSuperPageToken';
 
 // Types for the listing based on your interface
 interface User {
@@ -70,6 +74,9 @@ interface Listing {
 	updatedAt: string;
 	// Additional UI properties
 	isSaved?: boolean;
+	// Add token contract info
+	tokenContractAddress?: string;
+	chainId?: number;
 }
 
 export default function ListingDetailPage() {
@@ -85,6 +92,24 @@ export default function ListingDetailPage() {
 	const [showPurchaseDialog, setShowPurchaseDialog] = useState(false);
 	const [isPurchasing, setIsPurchasing] = useState(false);
 	const [txId, setTxID] = useState<string | null>(null);
+	const [burnTxHash, setBurnTxHash] = useState<string | null>(null);
+
+	// Token contract integration
+	const contractAddress =
+		listing?.tokenContractAddress ||
+		'0xB67c0ee9f2D84B53A245d20Cd820ad79a6B97bC3';
+	const chainId = listing?.chainId || 1;
+
+	const {
+		tokenInfo,
+		userInfo,
+		loading: tokenLoading,
+		error: tokenError,
+		account,
+		isConnected,
+		burnTokens,
+		connectWallet,
+	} = useSuperPageToken(contractAddress);
 
 	// Fetch listing data
 	useEffect(() => {
@@ -110,27 +135,62 @@ export default function ListingDetailPage() {
 		fetchListing();
 	}, [id]);
 
-	// Handle purchase
+	// Get Subscan explorer URL
+	const getExplorerUrl = (txHash: string): string => {
+		return `https://assethub-westend.subscan.io/extrinsic/${txHash}`;
+	};
+
+	// Check if user has enough tokens for purchase
+	const hasEnoughTokens = (): boolean => {
+		if (!userInfo || !listing) return false;
+		const userBalance = parseFloat(userInfo.balance);
+		return userBalance >= listing.priceWithToken;
+	};
+
+	// Handle purchase with token burning
 	const handlePurchase = async () => {
 		if (!listing) return;
 
-		// Set loading state BEFORE making the API call
+		// Check wallet connection first
+		if (!isConnected) {
+			toast.error('Please connect your wallet first');
+			return;
+		}
+
+		// Check if user has enough tokens
+		if (!hasEnoughTokens()) {
+			toast.error(
+				`Insufficient token balance. You need ${
+					listing.priceWithToken
+				} tokens but only have ${userInfo?.balance || 0}.`
+			);
+			return;
+		}
+
 		setIsPurchasing(true);
 
 		try {
-			// Make the API call
-			const response = await axios.post(`/tokens/claim`, {
-				tokenAddress: 'bAmtmPSAzQywiQ5Nor6CskV3oD9DmEmHtAZHxADywNH',
-				recipientAddress: 'F2qa5Qd2iRM9B28dhzx3g9RuvSxoAJs7BPC4KSj6FjHV',
-				priceWithToken: listing.priceWithToken,
-			});
+			// First, burn the tokens from the user's wallet
+			if (contractAddress) {
+				toast.loading('Burning tokens for purchase...');
 
-			console.log(response);
-			setTxID(response.data.data.transactionId);
-			toast.success(
-				'Purchase successful! Transaction ID: ' +
-					response.data.data.transactionId
-			);
+				const burnTx = await burnTokens(
+					listing.priceWithToken.toString(),
+					`Purchase: ${listing.title}`
+				);
+
+				// Wait for burn transaction to complete
+				const burnReceipt = await burnTx.wait();
+
+				if (burnReceipt?.status !== 1) {
+					throw new Error('Token burn transaction failed');
+				}
+
+				setBurnTxHash(burnTx.hash);
+				toast.success('Tokens burned successfully!');
+			}
+
+			toast.success('Purchase successful!');
 
 			// If this is a limited item, update the quantity
 			if (listing.isLimited && listing.quantity) {
@@ -139,15 +199,21 @@ export default function ListingDetailPage() {
 					quantity: listing.quantity - 1,
 				});
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Error processing purchase:', error);
-			toast.error('Failed to process purchase. Please try again.');
+
+			// Handle specific error cases
+			if (error.message?.includes('Insufficient token balance')) {
+				toast.error('Insufficient token balance for this purchase');
+			} else if (error.message?.includes('burn')) {
+				toast.error('Failed to burn tokens. Purchase cancelled.');
+			} else {
+				toast.error('Failed to process purchase. Please try again.');
+			}
 		} finally {
 			// Only set isPurchasing to false if there was an error
 			// If transaction was successful, keep button disabled
-			if (!txId) {
-				setIsPurchasing(false);
-			}
+			setIsPurchasing(false);
 		}
 	};
 
@@ -284,6 +350,28 @@ export default function ListingDetailPage() {
 								</div>
 							</div>
 
+							{/* Token Balance Display */}
+							{contractAddress && isConnected && userInfo && (
+								<div className='pt-4 border-t'>
+									<div className='bg-blue-50 p-3 rounded-lg'>
+										<div className='flex justify-between items-center mb-1'>
+											<span className='text-sm font-medium text-blue-700'>
+												Your Token Balance
+											</span>
+											<span className='font-bold text-blue-900'>
+												{parseFloat(userInfo.balance).toLocaleString()}{' '}
+												{tokenInfo?.symbol}
+											</span>
+										</div>
+										{!hasEnoughTokens() && (
+											<p className='text-xs text-red-600 mt-1'>
+												Insufficient balance for this purchase
+											</p>
+										)}
+									</div>
+								</div>
+							)}
+
 							<div className='pt-4 border-t'>
 								<div className='flex justify-between items-center mb-2'>
 									<span className='text-muted-foreground'>Price</span>
@@ -305,24 +393,66 @@ export default function ListingDetailPage() {
 									</div>
 								)}
 							</div>
+
+							{/* Wallet Connection Alert */}
+							{contractAddress && !isConnected && (
+								<Alert>
+									<Wallet className='h-4 w-4' />
+									<AlertDescription>
+										Connect your wallet to check token balance and make
+										purchases
+									</AlertDescription>
+								</Alert>
+							)}
+
+							{/* Token Error Alert */}
+							{tokenError && (
+								<Alert variant='destructive'>
+									<AlertTriangle className='h-4 w-4' />
+									<AlertDescription>{tokenError}</AlertDescription>
+								</Alert>
+							)}
 						</CardContent>
 
 						<CardFooter className='flex-col space-y-3'>
-							<Button
-								className='w-full'
-								size='lg'
-								disabled={
-									isOwner || (listing.isLimited && listing.quantity === 0)
-								}
-								onClick={() => setShowPurchaseDialog(true)}
-							>
-								<ShoppingCart size={16} className='mr-2' />
-								{isOwner
-									? 'You own this item'
-									: listing.isLimited && listing.quantity === 0
-									? 'Sold out'
-									: `Buy for ${listing.priceWithToken.toFixed(2)} LP`}
-							</Button>
+							{/* Connect Wallet Button */}
+							{contractAddress && !isConnected ? (
+								<Button
+									className='w-full'
+									variant='outline'
+									onClick={connectWallet}
+									disabled={tokenLoading}
+								>
+									<Wallet size={16} className='mr-2' />
+									{tokenLoading ? 'Connecting...' : 'Connect Wallet'}
+								</Button>
+							) : (
+								/* Purchase Button */
+								<Button
+									className='w-full'
+									size='lg'
+									disabled={
+										isOwner ||
+										(listing.isLimited && listing.quantity === 0) ||
+										isPurchasing ||
+										(contractAddress && (!isConnected || !hasEnoughTokens()))
+									}
+									onClick={() => setShowPurchaseDialog(true)}
+								>
+									<ShoppingCart size={16} className='mr-2' />
+									{isPurchasing
+										? 'Processing...'
+										: isOwner
+										? 'You own this item'
+										: listing.isLimited && listing.quantity === 0
+										? 'Sold out'
+										: contractAddress && !isConnected
+										? 'Connect Wallet'
+										: contractAddress && !hasEnoughTokens()
+										? 'Insufficient Token Balance'
+										: `Buy for ${listing.priceWithToken.toFixed(2)} LP`}
+								</Button>
+							)}
 
 							<div className='flex gap-3 w-full'>
 								<Button
@@ -361,6 +491,31 @@ export default function ListingDetailPage() {
 					</DialogHeader>
 
 					<div className='py-4'>
+						{/* Token Balance Check */}
+						{contractAddress && isConnected && userInfo && (
+							<div className='mb-4 p-3 bg-blue-50 rounded-lg'>
+								<div className='flex justify-between items-center'>
+									<span className='text-sm font-medium'>
+										Your Token Balance
+									</span>
+									<span className='font-bold'>
+										{parseFloat(userInfo.balance).toLocaleString()}{' '}
+										{tokenInfo?.symbol}
+									</span>
+								</div>
+								{!hasEnoughTokens() && (
+									<Alert variant='destructive' className='mt-2'>
+										<AlertTriangle className='h-4 w-4' />
+										<AlertDescription>
+											Insufficient token balance. You need{' '}
+											{listing.priceWithToken} tokens but only have{' '}
+											{userInfo.balance}.
+										</AlertDescription>
+									</Alert>
+								)}
+							</div>
+						)}
+
 						<div className='flex justify-between py-2 border-b'>
 							<span>Item Price</span>
 							<span className='font-medium'>
@@ -379,18 +534,46 @@ export default function ListingDetailPage() {
 								{listing.priceWithToken.toFixed(2)} LP
 							</span>
 						</div>
+
+						{contractAddress && (
+							<div className='mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200'>
+								<div className='flex items-center gap-2 text-amber-700'>
+									<Flame className='h-4 w-4' />
+									<span className='text-sm font-medium'>
+										Tokens will be burned from your wallet
+									</span>
+								</div>
+								<p className='text-xs text-amber-600 mt-1'>
+									This transaction will permanently remove tokens from your
+									balance
+								</p>
+							</div>
+						)}
 					</div>
 
 					<div>
 						{txId && (
 							<div className='mt-4'>
 								<a
-									href={`https://solscan.io/tx/${txId}?cluster=devnet`}
+									href={`https://assethub-westend.subscan.io/extrinsic//${txId}`}
 									target='_blank'
 									rel='noopener noreferrer'
 									className='text-blue-500 hover:underline'
 								>
-									View Transaction in Solscan
+									View Transaction in Subscan
+								</a>
+							</div>
+						)}
+
+						{burnTxHash && (
+							<div className='mt-2'>
+								<a
+									href={getExplorerUrl(burnTxHash)}
+									target='_blank'
+									rel='noopener noreferrer'
+									className='text-green-500 hover:underline'
+								>
+									View Burn Transaction on Subscan
 								</a>
 							</div>
 						)}
@@ -400,18 +583,25 @@ export default function ListingDetailPage() {
 						<Button
 							variant='outline'
 							onClick={() => setShowPurchaseDialog(false)}
+							disabled={isPurchasing}
 						>
 							Cancel
 						</Button>
 
 						<Button
 							onClick={handlePurchase}
-							disabled={isPurchasing || txId !== null}
+							disabled={
+								isPurchasing ||
+								txId !== null ||
+								(contractAddress && (!isConnected || !hasEnoughTokens()))
+							}
 						>
 							{isPurchasing
 								? 'Processing...'
 								: txId
 								? 'Purchase Complete'
+								: contractAddress && !hasEnoughTokens()
+								? 'Insufficient Balance'
 								: 'Complete Purchase'}
 						</Button>
 					</DialogFooter>
