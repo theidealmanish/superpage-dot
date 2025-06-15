@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
+import { PrivyProvider } from '@privy-io/react-auth';
 
 const geistSans = Geist({
 	variable: '--font-geist-sans',
@@ -23,8 +24,22 @@ export default function App({ children }: { children: React.ReactNode }) {
 				<body
 					className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 				>
-					{children}
-					<Toaster richColors />
+					<PrivyProvider
+						appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ''}
+						config={{
+							embeddedWallets: {
+								ethereum: {
+									createOnLogin: 'all-users',
+								},
+								solana: {
+									createOnLogin: 'all-users',
+								},
+							},
+						}}
+					>
+						{children}
+						<Toaster richColors />
+					</PrivyProvider>
 				</body>
 			</html>
 		</QueryClientProvider>
