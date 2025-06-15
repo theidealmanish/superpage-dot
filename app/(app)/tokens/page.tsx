@@ -73,6 +73,7 @@ interface EthereumProvider {
 
 declare global {
 	interface Window {
+		// @ts-ignore
 		ethereum?: EthereumProvider;
 		talismanEth?: EthereumProvider;
 	}
@@ -127,7 +128,7 @@ export default function TokensPage() {
 		defaultValues: {
 			name: '',
 			symbol: '',
-			network: 'westend',
+			network: 'Westend asset Hub',
 			decimals: 18,
 			totalSupply: 1_000_000,
 			epochMintAmount: 100,
@@ -262,8 +263,9 @@ export default function TokensPage() {
 				network: 'westend',
 			};
 
-			// const response = await axios.post('/tokens', tokenData);
-			// setTokens([...tokens, response.data.data]);
+			console.log('Token data to save:', tokenData);
+			const response = await axios.post('/tokens', tokenData);
+			setTokens([...tokens, response.data.data]);
 
 			toast.success(`Token created successfully! Address: ${contractAddress}`);
 			setIsDialogOpen(false);
