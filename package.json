@@ -46,7 +46,7 @@
 		"ethers": "^6.14.3",
 		"framer-motion": "^12.11.3",
 		"lucide-react": "^0.501.0",
-		"next": "15.2.3",
+		"next": "15.2.4",
 		"qr": "^0.4.0",
 		"qrcode.react": "^4.2.0",
 		"react": "^19.0.0",
