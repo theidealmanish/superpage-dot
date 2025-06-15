@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import axios from '@/lib/axios';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import Loading from '@/components/Loading';
 import { useForm } from 'react-hook-form';
 import {
 	Edit2,
