@@ -1,5 +1,5 @@
 import { Contract, Signer, Provider, InterfaceAbi } from 'ethers';
-import SuperPageTippingABI from '../abis/SuperPageTipping.json';
+import SuperPageTippingABI from '@/contracts/abis/SuperPageTipping.json';
 
 // Contract constants
 export const CONTRACT_ADDRESS =
